@@ -23,20 +23,55 @@ const MOCK_LATENCY = 300;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isBrowser = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
+const safeGetItem = (key) => {
+  if (!isBrowser()) return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    console.warn('localStorage getItem failed', error);
+    return null;
+  }
+};
+
+const safeSetItem = (key, value) => {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    console.warn('localStorage setItem failed', error);
+  }
+};
+
+const safeRemoveItem = (key) => {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    console.warn('localStorage removeItem failed', error);
+  }
+};
+
+const parseJson = (value, fallback) => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.warn('JSON parse failed', error);
+    return fallback;
+  }
+};
+
 function getUsedCodes() {
-  if (typeof window === 'undefined') return [];
-  const raw = window.localStorage.getItem(STORAGE_KEYS.usedCodes);
-  return raw ? JSON.parse(raw) : [];
+  const raw = safeGetItem(STORAGE_KEYS.usedCodes);
+  return parseJson(raw, []);
 }
 
 function rememberCode(code) {
-  if (typeof window === 'undefined') return;
   const current = new Set(getUsedCodes());
   current.add(code);
-  window.localStorage.setItem(
-    STORAGE_KEYS.usedCodes,
-    JSON.stringify(Array.from(current)),
-  );
+  safeSetItem(STORAGE_KEYS.usedCodes, JSON.stringify(Array.from(current)));
 }
 
 export async function signInWithCode(code) {
@@ -73,7 +108,7 @@ export async function signInWithCode(code) {
     if (updateError) throw new Error(updateError.message);
 
     const user = { id: profile.id, name: profile.name, code: normalized };
-    window.localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
+    safeSetItem(STORAGE_KEYS.user, JSON.stringify(user));
     return user;
   }
 
@@ -92,14 +127,14 @@ export async function signInWithCode(code) {
   };
 
   rememberCode(normalized);
-  window.localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
+  safeSetItem(STORAGE_KEYS.user, JSON.stringify(user));
   return user;
 }
 
 export async function loadUser() {
-  if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem(STORAGE_KEYS.user);
-  if (raw) return JSON.parse(raw);
+  const raw = safeGetItem(STORAGE_KEYS.user);
+  const stored = parseJson(raw, null);
+  if (stored) return stored;
 
   if (isSupabaseConfigured) {
     const { data } = await supabase.auth.getUser();
@@ -109,7 +144,7 @@ export async function loadUser() {
 }
 
 export async function logout() {
-  window.localStorage.removeItem(STORAGE_KEYS.user);
+  safeRemoveItem(STORAGE_KEYS.user);
   if (isSupabaseConfigured) {
     await supabase.auth.signOut();
   }
@@ -126,9 +161,8 @@ export async function loadProgress(userId) {
     return data?.data ?? {};
   }
 
-  if (typeof window === 'undefined') return {};
-  const raw = window.localStorage.getItem(`${STORAGE_KEYS.progress}:${userId}`);
-  return raw ? JSON.parse(raw) : {};
+  const raw = safeGetItem(`${STORAGE_KEYS.progress}:${userId}`);
+  return parseJson(raw, {});
 }
 
 export async function saveProgress(userId, payload) {
@@ -140,11 +174,7 @@ export async function saveProgress(userId, payload) {
     return;
   }
 
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(
-    `${STORAGE_KEYS.progress}:${userId}`,
-    JSON.stringify(payload),
-  );
+  safeSetItem(`${STORAGE_KEYS.progress}:${userId}`, JSON.stringify(payload));
 }
 
 export async function fetchTheory() {
