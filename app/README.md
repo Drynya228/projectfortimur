@@ -123,6 +123,35 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 - **Прогресс учеников** — сохраняется в Supabase (`progress`) или в `localStorage`.
 - **Карточки и теория** — загружаются из Supabase (`training_cards`, `theory`) либо из JSON-файлов.
 - **Расписание** — таблица мероприятий с фильтрами по статусу, данные Supabase (`schedule`) или JSON.
+- **Мои задачи** — личный план ученика, хранится в Supabase (`tasks`) или в `localStorage` при офлайн-режиме.
+
+### Supabase: таблица задач
+
+Для синхронизации раздела «Мои задачи» добавьте таблицу `tasks`:
+
+```sql
+create table if not exists tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  title text not null,
+  category text,
+  status text not null default 'todo',
+  due_date date,
+  created_at timestamptz not null default now()
+);
+```
+
+Рекомендуемые политики RLS для `anon`-ключа:
+
+```sql
+alter table tasks enable row level security;
+create policy "tasks_select" on tasks for select using (auth.uid() = user_id);
+create policy "tasks_insert" on tasks for insert with check (auth.uid() = user_id);
+create policy "tasks_update" on tasks for update using (auth.uid() = user_id);
+create policy "tasks_delete" on tasks for delete using (auth.uid() = user_id);
+```
+
+Если RLS отключён, приложение также сможет работать, но в боевом режиме рекомендуется ограничить доступ.
 
 ## Скрипты
 

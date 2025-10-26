@@ -3,6 +3,7 @@ import codes from '../data/codes.json';
 import theory from '../data/theory.json';
 import schedule from '../data/schedule.json';
 import cards from '../data/cards.json';
+import tasks from '../data/tasks.json';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -16,6 +17,7 @@ export const supabase = isSupabaseConfigured
 const STORAGE_KEYS = {
   user: 'fg_user',
   progress: 'fg_progress',
+  tasks: 'fg_tasks',
 };
 
 const MOCK_LATENCY = 300;
@@ -62,6 +64,13 @@ const parseJson = (value, fallback) => {
   }
 };
 
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `task_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+};
+
 export async function signInWithCode(code) {
   const normalized = code.trim().toUpperCase();
 
@@ -101,14 +110,9 @@ export async function signInWithCode(code) {
         profile = createdProfile;
       }
 
-      const payloadToUpdate = { user_id: profile.id };
-      if (data.used !== true) {
-        payloadToUpdate.used = true;
-      }
-
       const { error: updateError } = await supabase
         .from('access_codes')
-        .update(payloadToUpdate)
+        .update({ user_id: profile.id })
         .eq('id', data.id);
 
       if (updateError) throw new Error(updateError.message);
@@ -193,6 +197,140 @@ export async function saveProgress(userId, payload) {
   }
 
   safeSetItem(`${STORAGE_KEYS.progress}:${userId}`, JSON.stringify(payload));
+}
+
+const getTasksKey = (userId) => `${STORAGE_KEYS.tasks}:${userId}`;
+
+const seedOfflineTasks = (userId) => {
+  const seeded = tasks.map((item) => ({
+    ...item,
+    id: generateId(),
+    user_id: userId,
+  }));
+  safeSetItem(getTasksKey(userId), JSON.stringify(seeded));
+  return seeded;
+};
+
+export async function fetchTasks(userId) {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, user_id, title, category, status, due_date, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+      if (error) throw new Error(error.message);
+      if (Array.isArray(data)) {
+        return data;
+      }
+    } catch (error) {
+      console.warn('Не удалось загрузить задачи из Supabase, переключаемся на локальный режим.', error);
+    }
+  }
+
+  const stored = parseJson(safeGetItem(getTasksKey(userId)), null);
+  if (Array.isArray(stored)) {
+    return stored;
+  }
+  return seedOfflineTasks(userId);
+}
+
+const persistOfflineTasks = (userId, payload) => {
+  safeSetItem(getTasksKey(userId), JSON.stringify(payload));
+  return payload;
+};
+
+export async function createTask(userId, payload) {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert({
+          user_id: userId,
+          title: payload.title,
+          category: payload.category,
+          status: payload.status,
+          due_date: payload.due_date ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      if (data) {
+        return data;
+      }
+    } catch (error) {
+      console.warn('Не удалось создать задачу в Supabase, сохраняем локально.', error);
+    }
+  }
+
+  const current = await fetchTasks(userId);
+  const nextTask = {
+    id: generateId(),
+    user_id: userId,
+    title: payload.title,
+    category: payload.category,
+    status: payload.status,
+    due_date: payload.due_date ?? null,
+    created_at: new Date().toISOString(),
+  };
+  const updated = [...current, nextTask];
+  persistOfflineTasks(userId, updated);
+  return nextTask;
+}
+
+export async function updateTaskStatus(userId, taskId, nextStatus) {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({ status: nextStatus })
+        .eq('id', taskId)
+        .eq('user_id', userId)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      if (data) {
+        return data;
+      }
+    } catch (error) {
+      console.warn('Не удалось обновить задачу в Supabase, обновляем локально.', error);
+    }
+  }
+
+  const current = await fetchTasks(userId);
+  const updated = current.map((task) =>
+    task.id === taskId
+      ? {
+          ...task,
+          status: nextStatus,
+        }
+      : task,
+  );
+  persistOfflineTasks(userId, updated);
+  return updated.find((task) => task.id === taskId) ?? null;
+}
+
+export async function deleteTask(userId, taskId) {
+  if (isSupabaseConfigured) {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .eq('user_id', userId);
+      if (!error) {
+        return true;
+      }
+      throw new Error(error.message);
+    } catch (error) {
+      console.warn('Не удалось удалить задачу в Supabase, очищаем локально.', error);
+    }
+  }
+
+  const current = await fetchTasks(userId);
+  const updated = current.filter((task) => task.id !== taskId);
+  persistOfflineTasks(userId, updated);
+  return true;
 }
 
 async function withOfflineFallback(task, fallbackData, label) {

@@ -8,10 +8,14 @@ import {
   fetchCards,
   fetchSchedule,
   fetchTheory,
+  fetchTasks,
   loadProgress,
   loadUser,
   logout,
   saveProgress,
+  createTask,
+  updateTaskStatus,
+  deleteTask,
   signInWithCode,
 } from './services/supabaseClient.js';
 
@@ -29,6 +33,7 @@ export default function App() {
   const [cards, setCards] = useState([]);
   const [theoryItems, setTheoryItems] = useState([]);
   const [scheduleItems, setScheduleItems] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [globalError, setGlobalError] = useState('');
 
   useEffect(() => {
@@ -52,6 +57,8 @@ export default function App() {
             knownCardIds: storedProgress.knownCardIds ?? [],
             lastSeenIndex: storedProgress.lastSeenIndex ?? {},
           });
+          const storedTasks = await fetchTasks(existingUser.id);
+          setTasks(storedTasks ?? []);
         }
       } catch (error) {
         console.error(error);
@@ -74,6 +81,8 @@ export default function App() {
         knownCardIds: storedProgress.knownCardIds ?? [],
         lastSeenIndex: storedProgress.lastSeenIndex ?? {},
       });
+      const storedTasks = await fetchTasks(signedUser.id);
+      setTasks(storedTasks ?? []);
       setView('dashboard');
     } finally {
       setAuthLoading(false);
@@ -84,6 +93,7 @@ export default function App() {
     await logout();
     setUser(null);
     setProgress({ ...INITIAL_PROGRESS });
+    setTasks([]);
     setView('dashboard');
   };
 
@@ -105,6 +115,33 @@ export default function App() {
 
       return merged;
     });
+  };
+
+  const handleTaskCreate = async (payload) => {
+    if (!user) return;
+    const created = await createTask(user.id, payload);
+    setTasks((prev) => [...prev, created]);
+  };
+
+  const handleTaskStatusChange = async (taskId, nextStatus) => {
+    if (!user) return;
+    const updated = await updateTaskStatus(user.id, taskId, nextStatus);
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              status: updated?.status ?? nextStatus,
+            }
+          : task,
+      ),
+    );
+  };
+
+  const handleTaskDelete = async (taskId) => {
+    if (!user) return;
+    await deleteTask(user.id, taskId);
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
   };
 
   const totalsByCategory = useMemo(() => {
@@ -187,6 +224,10 @@ export default function App() {
       totals={totalsByCategory}
       onNavigate={setView}
       onLogout={handleLogout}
+      tasks={tasks}
+      onTaskCreate={handleTaskCreate}
+      onTaskStatusChange={handleTaskStatusChange}
+      onTaskDelete={handleTaskDelete}
     />
   );
 }
