@@ -75,45 +75,49 @@ function rememberCode(code) {
 }
 
 export async function signInWithCode(code) {
+  const normalized = code.trim().toUpperCase();
+
   if (isSupabaseConfigured) {
-    const normalized = code.trim().toUpperCase();
-    const { data, error } = await supabase
-      .from('access_codes')
-      .select('id, code, owner_name, used, user_id')
-      .eq('code', normalized)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('access_codes')
+        .select('id, code, owner_name, used, user_id')
+        .eq('code', normalized)
+        .maybeSingle();
 
-    if (error) throw new Error('Ошибка проверки кода: ' + error.message);
-    if (!data) throw new Error('Код не найден');
-    if (data.used && data.user_id) throw new Error('Код уже активирован');
+      if (error) throw new Error('Ошибка проверки кода: ' + error.message);
+      if (!data) throw new Error('Код не найден');
+      if (data.used && data.user_id) throw new Error('Код уже активирован');
 
-    const profilePayload = {
-      name: data.owner_name ?? `Ученик ${normalized.slice(-4)}`,
-      code: normalized,
-    };
+      const profilePayload = {
+        name: data.owner_name ?? `Ученик ${normalized.slice(-4)}`,
+        code: normalized,
+      };
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .insert(profilePayload)
-      .select()
-      .single();
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .insert(profilePayload)
+        .select()
+        .single();
 
-    if (profileError) throw new Error(profileError.message);
+      if (profileError) throw new Error(profileError.message);
 
-    const { error: updateError } = await supabase
-      .from('access_codes')
-      .update({ used: true, user_id: profile.id })
-      .eq('id', data.id);
+      const { error: updateError } = await supabase
+        .from('access_codes')
+        .update({ used: true, user_id: profile.id })
+        .eq('id', data.id);
 
-    if (updateError) throw new Error(updateError.message);
+      if (updateError) throw new Error(updateError.message);
 
-    const user = { id: profile.id, name: profile.name, code: normalized };
-    safeSetItem(STORAGE_KEYS.user, JSON.stringify(user));
-    return user;
+      const user = { id: profile.id, name: profile.name, code: normalized };
+      safeSetItem(STORAGE_KEYS.user, JSON.stringify(user));
+      return user;
+    } catch (error) {
+      console.warn('Не удалось выполнить вход через Supabase, пробуем офлайн-режим.', error);
+    }
   }
 
   await wait(MOCK_LATENCY);
-  const normalized = code.trim().toUpperCase();
   const existing = codes.find((item) => item.code.toUpperCase() === normalized);
   if (!existing) throw new Error('Код не найден');
   if (getUsedCodes().includes(normalized)) {
@@ -137,8 +141,12 @@ export async function loadUser() {
   if (stored) return stored;
 
   if (isSupabaseConfigured) {
-    const { data } = await supabase.auth.getUser();
-    return data?.user ?? null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      return data?.user ?? null;
+    } catch (error) {
+      console.warn('Не удалось получить пользователя из Supabase.', error);
+    }
   }
   return null;
 }
@@ -152,13 +160,17 @@ export async function logout() {
 
 export async function loadProgress(userId) {
   if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from('progress')
-      .select('data')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    return data?.data ?? {};
+    try {
+      const { data, error } = await supabase
+        .from('progress')
+        .select('data')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data?.data ?? {};
+    } catch (error) {
+      console.warn('Не удалось загрузить прогресс из Supabase, используем локальное хранилище.', error);
+    }
   }
 
   const raw = safeGetItem(`${STORAGE_KEYS.progress}:${userId}`);
@@ -167,47 +179,76 @@ export async function loadProgress(userId) {
 
 export async function saveProgress(userId, payload) {
   if (isSupabaseConfigured) {
-    const { error } = await supabase
-      .from('progress')
-      .upsert({ user_id: userId, data: payload });
-    if (error) throw new Error(error.message);
-    return;
+    try {
+      const { error } = await supabase
+        .from('progress')
+        .upsert({ user_id: userId, data: payload });
+      if (!error) {
+        return;
+      }
+      throw new Error(error.message);
+    } catch (error) {
+      console.warn('Не удалось сохранить прогресс в Supabase, записываем локально.', error);
+    }
   }
 
   safeSetItem(`${STORAGE_KEYS.progress}:${userId}`, JSON.stringify(payload));
 }
 
-export async function fetchTheory() {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase.from('theory').select('*');
-    if (error) throw new Error(error.message);
-    return data ?? [];
+async function withOfflineFallback(task, fallbackData, label) {
+  if (!isSupabaseConfigured) {
+    await wait(MOCK_LATENCY);
+    return fallbackData;
   }
-  await wait(MOCK_LATENCY);
-  return theory;
+
+  try {
+    const result = await task();
+    if (!result) {
+      console.warn(`Получены пустые данные из Supabase для ${label}, используем офлайн-версии.`);
+      return fallbackData;
+    }
+    return result;
+  } catch (error) {
+    console.warn(`Ошибка при загрузке ${label} из Supabase, переключаемся на офлайн-режим.`, error);
+    return fallbackData;
+  }
+}
+
+export async function fetchTheory() {
+  return withOfflineFallback(
+    async () => {
+      const { data, error } = await supabase.from('theory').select('*');
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    theory,
+    'теории',
+  );
 }
 
 export async function fetchSchedule() {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from('schedule')
-      .select('*')
-      .order('date');
-    if (error) throw new Error(error.message);
-    return data ?? [];
-  }
-  await wait(MOCK_LATENCY);
-  return schedule;
+  return withOfflineFallback(
+    async () => {
+      const { data, error } = await supabase
+        .from('schedule')
+        .select('*')
+        .order('date');
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    schedule,
+    'расписания',
+  );
 }
 
 export async function fetchCards() {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from('training_cards')
-      .select('*');
-    if (error) throw new Error(error.message);
-    return data ?? [];
-  }
-  await wait(MOCK_LATENCY);
-  return cards;
+  return withOfflineFallback(
+    async () => {
+      const { data, error } = await supabase.from('training_cards').select('*');
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    cards,
+    'тренажёра',
+  );
 }
