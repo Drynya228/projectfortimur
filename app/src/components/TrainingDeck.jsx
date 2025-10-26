@@ -69,51 +69,51 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
   const total = categoryCards.length;
 
   return (
-    <div className="min-h-screen bg-slate-900/5 py-10 sm:py-14">
-      <div className="max-w-5xl mx-auto px-4 space-y-10">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <button
-              onClick={onBack}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brand-dark"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M12.707 15.707a1 1 0 01-1.414 0L6.586 11l4.707-4.707a1 1 0 10-1.414-1.414l-5.414 5.414a1 1 0 000 1.414l5.414 5.414a1 1 0 001.414 0z" />
-              </svg>
-              Назад в кабинет
-            </button>
-            <h2 className="mt-4 text-3xl font-display font-semibold text-slate-900">
-              Тренажёр по финансовой грамотности
-            </h2>
-            <p className="text-slate-600 mt-2 max-w-2xl">
-              Переверните карточку, чтобы увидеть ответ. Отмечайте «Знаю» и «Нужно повторить», чтобы Тимур видел ваш прогресс.
-            </p>
+    <div className="min-h-screen bg-slate-900/5 py-12">
+      <div className="mx-auto flex max-w-5xl flex-col gap-10 px-4">
+        <header className="rounded-[2.5rem] border border-slate-200/60 bg-gradient-to-br from-white via-slate-50 to-blue-50 p-10 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-brand transition hover:text-brand-dark"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M12.707 15.707a1 1 0 01-1.414 0L6.586 11l4.707-4.707a1 1 0 10-1.414-1.414l-5.414 5.414a1 1 0 000 1.414l5.414 5.414a1 1 0 001.414 0z" />
+            </svg>
+            Назад в кабинет
+          </button>
+          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-3">
+              <h2 className="text-3xl font-display font-semibold text-slate-900">Тренажёр по финансовой грамотности</h2>
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
+                Переворачивайте карточки, чтобы увидеть ответы, и отмечайте свой уровень уверенности. Прогресс сохраняется автоматически.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-white/60 bg-white/80 px-5 py-3 text-sm text-slate-600 shadow-inner">
+              Прогресс: {knownCount} / {total} карточек
+            </div>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 px-5 py-3 text-sm text-slate-600 shadow-sm">
-            Прогресс: {knownCount} / {total} карточек
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => handleSelection(category)}
+                className={`rounded-full px-5 py-2 text-sm font-medium transition border ${
+                  category === selectedCategory
+                    ? 'border-transparent bg-brand text-white shadow-lg shadow-brand/25'
+                    : 'border-slate-200 bg-white/80 text-slate-600 hover:border-brand/60 hover:text-brand'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
           </div>
-        </div>
+        </header>
 
-        <div className="flex flex-wrap gap-3">
-          {categories.map((category) => (
-            <button
-              key={category}
-              onClick={() => handleSelection(category)}
-              className={`rounded-full px-5 py-2 text-sm font-medium transition border ${
-                category === selectedCategory
-                  ? 'bg-brand text-white border-brand shadow'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-brand hover:text-brand'
-              }`}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="relative">
             <div
-              className="h-[360px] sm:h-[420px] bg-white rounded-3xl border border-slate-200 shadow-xl flex flex-col gap-6 justify-between p-10 cursor-pointer select-none transition hover:shadow-2xl"
+              className="flex h-[380px] cursor-pointer select-none flex-col justify-between gap-6 rounded-[2.5rem] border border-slate-200 bg-white p-10 shadow-[0_18px_45px_rgba(15,23,42,0.08)] transition hover:-translate-y-1 hover:shadow-2xl sm:h-[440px]"
               onClick={() => setIsFlipped((prev) => !prev)}
             >
               {card ? (
@@ -138,30 +138,28 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
                   </div>
                 </>
               ) : (
-                <div className="text-center text-slate-500 m-auto">
-                  Карточки для выбранной категории пока не добавлены.
-                </div>
+                <div className="m-auto text-center text-slate-500">Карточки для выбранной категории пока не добавлены.</div>
               )}
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 flex flex-col gap-4">
+          <div className="flex flex-col gap-4 rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
             <h3 className="text-lg font-semibold text-slate-900">Как оцените карточку?</h3>
             <button
               onClick={() => handleAnswer(true)}
-              className="w-full rounded-2xl bg-emerald-500/90 text-white font-semibold py-3 shadow-sm hover:bg-emerald-500 transition disabled:opacity-60"
+              className="w-full rounded-2xl bg-emerald-500 text-white font-semibold py-3 shadow-sm transition hover:bg-emerald-500/90 disabled:opacity-60"
               disabled={!card}
             >
               Знаю хорошо
             </button>
             <button
               onClick={() => handleAnswer(false)}
-              className="w-full rounded-2xl bg-amber-400/80 text-slate-900 font-semibold py-3 shadow-sm hover:bg-amber-400 transition disabled:opacity-60"
+              className="w-full rounded-2xl bg-amber-400 text-slate-900 font-semibold py-3 shadow-sm transition hover:bg-amber-400/90 disabled:opacity-60"
               disabled={!card}
             >
               Нужно повторить
             </button>
-            <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm text-slate-600">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               Карточек в категории: {total}
             </div>
           </div>

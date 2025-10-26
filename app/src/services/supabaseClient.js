@@ -16,7 +16,6 @@ export const supabase = isSupabaseConfigured
 const STORAGE_KEYS = {
   user: 'fg_user',
   progress: 'fg_progress',
-  usedCodes: 'fg_used_codes',
 };
 
 const MOCK_LATENCY = 300;
@@ -63,17 +62,6 @@ const parseJson = (value, fallback) => {
   }
 };
 
-function getUsedCodes() {
-  const raw = safeGetItem(STORAGE_KEYS.usedCodes);
-  return parseJson(raw, []);
-}
-
-function rememberCode(code) {
-  const current = new Set(getUsedCodes());
-  current.add(code);
-  safeSetItem(STORAGE_KEYS.usedCodes, JSON.stringify(Array.from(current)));
-}
-
 export async function signInWithCode(code) {
   const normalized = code.trim().toUpperCase();
 
@@ -87,24 +75,40 @@ export async function signInWithCode(code) {
 
       if (error) throw new Error('Ошибка проверки кода: ' + error.message);
       if (!data) throw new Error('Код не найден');
-      if (data.used && data.user_id) throw new Error('Код уже активирован');
-
-      const profilePayload = {
-        name: data.owner_name ?? `Ученик ${normalized.slice(-4)}`,
-        code: normalized,
-      };
-
-      const { data: profile, error: profileError } = await supabase
+      const { data: existingProfile, error: selectProfileError } = await supabase
         .from('profiles')
-        .insert(profilePayload)
-        .select()
-        .single();
+        .select('id, name, code')
+        .eq('code', normalized)
+        .maybeSingle();
 
-      if (profileError) throw new Error(profileError.message);
+      if (selectProfileError) throw new Error(selectProfileError.message);
+
+      let profile = existingProfile;
+
+      if (!profile) {
+        const profilePayload = {
+          name: data.owner_name ?? `Ученик ${normalized.slice(-4)}`,
+          code: normalized,
+        };
+
+        const { data: createdProfile, error: profileError } = await supabase
+          .from('profiles')
+          .insert(profilePayload)
+          .select()
+          .single();
+
+        if (profileError) throw new Error(profileError.message);
+        profile = createdProfile;
+      }
+
+      const payloadToUpdate = { user_id: profile.id };
+      if (data.used !== true) {
+        payloadToUpdate.used = true;
+      }
 
       const { error: updateError } = await supabase
         .from('access_codes')
-        .update({ used: true, user_id: profile.id })
+        .update(payloadToUpdate)
         .eq('id', data.id);
 
       if (updateError) throw new Error(updateError.message);
@@ -120,9 +124,6 @@ export async function signInWithCode(code) {
   await wait(MOCK_LATENCY);
   const existing = codes.find((item) => item.code.toUpperCase() === normalized);
   if (!existing) throw new Error('Код не найден');
-  if (getUsedCodes().includes(normalized)) {
-    throw new Error('Код уже активирован');
-  }
 
   const user = {
     id: normalized,
@@ -130,7 +131,6 @@ export async function signInWithCode(code) {
     code: normalized,
   };
 
-  rememberCode(normalized);
   safeSetItem(STORAGE_KEYS.user, JSON.stringify(user));
   return user;
 }
