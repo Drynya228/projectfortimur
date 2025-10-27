@@ -35,9 +35,9 @@ export default function ScheduleTable({ items, onBack }) {
           </button>
           <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-3">
-              <h2 className="text-3xl font-display font-semibold text-slate-900">Расписание занятий</h2>
+              <h2 className="text-3xl font-display font-semibold text-slate-900">Расписание олимпиад</h2>
               <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
-                Узнайте, какие мероприятия открыты для регистрации, и запланируйте своё обучение заранее.
+                Следите за ключевыми олимпиадами по финансовой грамотности: статусы регистрации, формат проведения и дедлайны подачи заявок.
               </p>
             </div>
             <div className="rounded-3xl border border-white/60 bg-white/80 px-5 py-3 text-sm text-slate-600 shadow-inner">
@@ -76,6 +76,9 @@ export default function ScheduleTable({ items, onBack }) {
                 <th className="px-6 py-4 font-semibold">Дата</th>
                 <th className="px-6 py-4 font-semibold">Начало</th>
                 <th className="px-6 py-4 font-semibold">Окончание</th>
+                <th className="px-6 py-4 font-semibold">Формат</th>
+                <th className="px-6 py-4 font-semibold">Направление</th>
+                <th className="px-6 py-4 font-semibold">Регистрация до</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
@@ -96,12 +99,15 @@ export default function ScheduleTable({ items, onBack }) {
                   </td>
                   <td className="px-6 py-4">{item.start}</td>
                   <td className="px-6 py-4">{item.end}</td>
+                  <td className="px-6 py-4 text-slate-600">{item.format ?? '—'}</td>
+                  <td className="px-6 py-4 text-slate-600">{item.direction ?? '—'}</td>
+                  <td className="px-6 py-4 text-slate-600">{item.registration ?? '—'}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-slate-500">
-                    Подходящих занятий не найдено. Попробуйте другой фильтр.
+                  <td colSpan={8} className="px-6 py-10 text-center text-slate-500">
+                    Подходящих олимпиад не найдено. Попробуйте другой фильтр.
                   </td>
                 </tr>
               )}

@@ -3,14 +3,20 @@ import TaskPlanner from './TaskPlanner.jsx';
 
 const sections = [
   { id: 'trainer', title: 'Тренажёр', description: 'Карточки с вопросами и ответами по категориям.' },
+  {
+    id: 'review',
+    title: 'Повторение',
+    description: 'Карточки «Не знаю» и «Не уверен» для точечной проработки.',
+  },
   { id: 'theory', title: 'Теория', description: 'Подробные материалы и шпаргалки из занятий.' },
-  { id: 'schedule', title: 'Расписание', description: 'Актуальные занятия и статусы регистрации.' },
+  { id: 'schedule', title: 'Олимпиады', description: 'Расписание олимпиад и статусы регистрации.' },
 ];
 
 export default function Dashboard({
   user,
   progress,
   totals,
+  reviewSummary,
   tasks,
   onTaskCreate,
   onTaskStatusChange,
@@ -21,6 +27,7 @@ export default function Dashboard({
   const totalCards = Object.values(totals).reduce((sum, count) => sum + count, 0);
   const masteredCards = Object.values(progress).reduce((sum, count) => sum + count, 0);
   const completion = totalCards === 0 ? 0 : Math.round((masteredCards / totalCards) * 100);
+  const reviewTotal = reviewSummary?.total ?? 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-900">
@@ -38,11 +45,11 @@ export default function Dashboard({
                 Добро пожаловать, {user.name}!
               </h1>
               <p className="max-w-xl text-base leading-relaxed text-slate-200">
-                Выберите модуль, отслеживайте прогресс и обновляйте личный план обучения по финансовой грамотности. Все ключевые материалы и расписания находятся под рукой.
+                Выберите модуль, отслеживайте прогресс и обновляйте личный план обучения по финансовой грамотности. Все ключевые материалы, олимпиадные активности и задачи находятся под рукой.
               </p>
             </div>
 
-            <dl className="grid gap-4 text-sm text-slate-100 sm:grid-cols-2">
+            <dl className="grid gap-4 text-sm text-slate-100 sm:grid-cols-3">
               <div className="rounded-3xl border border-white/15 bg-white/10 px-5 py-4 shadow-inner">
                 <dt className="text-xs uppercase tracking-widest text-slate-300">Персональный код</dt>
                 <dd className="mt-2 font-semibold">{user.code}</dd>
@@ -50,6 +57,10 @@ export default function Dashboard({
               <div className="rounded-3xl border border-white/15 bg-white/10 px-5 py-4 shadow-inner">
                 <dt className="text-xs uppercase tracking-widest text-slate-300">Общий прогресс</dt>
                 <dd className="mt-2 font-semibold">{completion}% пройдено</dd>
+              </div>
+              <div className="rounded-3xl border border-white/15 bg-white/10 px-5 py-4 shadow-inner">
+                <dt className="text-xs uppercase tracking-widest text-slate-300">На повторение</dt>
+                <dd className="mt-2 font-semibold">{reviewTotal} карточек</dd>
               </div>
             </dl>
 
@@ -75,7 +86,7 @@ export default function Dashboard({
                 </p>
               </div>
             </div>
-            <div className="grid gap-3">
+            <div className="grid gap-3 md:grid-cols-2">
               {sections.map((section) => (
                 <button
                   key={section.id}
@@ -102,12 +113,71 @@ export default function Dashboard({
           </div>
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {Object.entries(totals).map(([category, total]) => (
-              <ProgressCard key={category} title={category} total={total} value={progress[category] ?? 0} />
+              <ProgressCard
+                key={category}
+                title={category}
+                total={total}
+                value={progress[category] ?? 0}
+                reviewCount={reviewSummary?.byCategory?.[category] ?? 0}
+              />
             ))}
           </div>
         </section>
 
-        <section className="grid gap-6 md:grid-cols-3">
+        <section className="rounded-[2.5rem] border border-white/10 bg-white/10 p-8 text-white shadow-[0_24px_60px_rgba(15,23,42,0.45)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <h2 className="text-2xl font-semibold">Повторение карточек</h2>
+              <p className="text-sm text-slate-200">
+                Используйте отдельный трек, чтобы проработать карточки с отметками «Не знаю» и «Не уверен». После повторения обновите статусы.
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('review')}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white hover:bg-white/10"
+            >
+              Перейти к повторению
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-300">Всего карточек на повторение</p>
+              <p className="mt-3 text-3xl font-semibold">{reviewTotal}</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-300">Не уверен</p>
+              <p className="mt-3 text-2xl font-semibold">{reviewSummary?.byStatus?.unsure ?? 0}</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-300">Не знаю</p>
+              <p className="mt-3 text-2xl font-semibold">{reviewSummary?.byStatus?.dontknow ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3 text-xs">
+            {Object.entries(reviewSummary?.byCategory ?? {}).length === 0 ? (
+              <span className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-slate-200">
+                Все категории закрыты без повторения — отличная работа!
+              </span>
+            ) : (
+              Object.entries(reviewSummary.byCategory).map(([category, count]) => (
+                <span
+                  key={category}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-slate-100"
+                >
+                  <span className="h-2 w-2 rounded-full bg-brand-light" />
+                  {category}: {count}
+                </span>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {sections.map((section) => (
             <button
               key={section.id}

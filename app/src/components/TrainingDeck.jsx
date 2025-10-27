@@ -1,5 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 
+const STATUS_CONFIG = {
+  know: {
+    label: 'Знаю хорошо',
+    description: 'Карточка больше не появится в повторении.',
+    accent: 'bg-emerald-500',
+  },
+  unsure: {
+    label: 'Не уверен',
+    description: 'Карточка попадёт в отдельный блок повторения.',
+    accent: 'bg-amber-400',
+  },
+  dontknow: {
+    label: 'Не знаю',
+    description: 'Карточка отмечена как требующая изучения.',
+    accent: 'bg-rose-500',
+  },
+};
+
 export default function TrainingDeck({ cards, progress, onProgressChange, onBack }) {
   const categories = useMemo(
     () => Array.from(new Set(cards.map((card) => card.category))),
@@ -15,12 +33,31 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
     [cards, selectedCategory],
   );
 
+  const statuses = useMemo(() => progress.statuses ?? {}, [progress.statuses]);
   const knownSet = useMemo(
-    () => new Set(progress.knownCardIds ?? []),
-    [progress.knownCardIds],
+    () =>
+      new Set(
+        Object.entries(statuses)
+          .filter(([, status]) => status === 'know')
+          .map(([id]) => id),
+      ),
+    [statuses],
   );
+
+  const reviewCounts = useMemo(() => {
+    return categoryCards.reduce(
+      (acc, card) => {
+        const status = statuses[String(card.id)];
+        if (status === 'unsure') acc.unsure += 1;
+        if (status === 'dontknow') acc.dontknow += 1;
+        return acc;
+      },
+      { unsure: 0, dontknow: 0 },
+    );
+  }, [categoryCards, statuses]);
+
   const knownCount = useMemo(
-    () => categoryCards.filter((card) => knownSet.has(card.id)).length,
+    () => categoryCards.filter((card) => knownSet.has(String(card.id))).length,
     [categoryCards, knownSet],
   );
 
@@ -41,20 +78,16 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
     setIsFlipped(false);
   };
 
-  const handleAnswer = (know) => {
+  const handleAnswer = (status) => {
     if (!categoryCards.length) return;
     const card = categoryCards[currentIndex];
-    const updatedSet = new Set(knownSet);
-    if (know) {
-      updatedSet.add(card.id);
-    } else {
-      updatedSet.delete(card.id);
-    }
-
+    const cardKey = String(card.id);
     const nextIndex = categoryCards.length === 0 ? 0 : (currentIndex + 1) % categoryCards.length;
 
     onProgressChange({
-      knownCardIds: Array.from(updatedSet),
+      statuses: {
+        [cardKey]: status,
+      },
       lastSeenIndex: {
         ...(progress.lastSeenIndex ?? {}),
         [selectedCategory]: nextIndex,
@@ -67,6 +100,7 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
 
   const card = categoryCards[currentIndex];
   const total = categoryCards.length;
+  const currentStatus = card ? statuses[String(card.id)] ?? null : null;
 
   return (
     <div className="min-h-screen bg-slate-900/5 py-12">
@@ -89,7 +123,7 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
               </p>
             </div>
             <div className="rounded-3xl border border-white/60 bg-white/80 px-5 py-3 text-sm text-slate-600 shadow-inner">
-              Прогресс: {knownCount} / {total} карточек
+              Прогресс: {knownCount} / {total} карточек · На повторение: {reviewCounts.unsure + reviewCounts.dontknow}
             </div>
           </div>
 
@@ -119,9 +153,17 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
               {card ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="uppercase text-xs tracking-[0.35em] text-brand font-semibold">
-                      {isFlipped ? 'Ответ' : 'Вопрос'}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="uppercase text-xs tracking-[0.35em] text-brand font-semibold">
+                        {isFlipped ? 'Ответ' : 'Вопрос'}
+                      </span>
+                      {currentStatus && STATUS_CONFIG[currentStatus] && (
+                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-600 bg-slate-100`}>
+                          <span className={`h-2 w-2 rounded-full ${STATUS_CONFIG[currentStatus].accent}`} />
+                          {STATUS_CONFIG[currentStatus].label}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-slate-400">Нажмите, чтобы перевернуть</span>
                   </div>
                   <p className={`text-xl sm:text-2xl font-semibold leading-snug text-slate-900 ${isFlipped ? 'hidden' : 'block'}`}>
@@ -146,21 +188,30 @@ export default function TrainingDeck({ cards, progress, onProgressChange, onBack
           <div className="flex flex-col gap-4 rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
             <h3 className="text-lg font-semibold text-slate-900">Как оцените карточку?</h3>
             <button
-              onClick={() => handleAnswer(true)}
+              onClick={() => handleAnswer('know')}
               className="w-full rounded-2xl bg-emerald-500 text-white font-semibold py-3 shadow-sm transition hover:bg-emerald-500/90 disabled:opacity-60"
               disabled={!card}
             >
               Знаю хорошо
             </button>
             <button
-              onClick={() => handleAnswer(false)}
+              onClick={() => handleAnswer('unsure')}
               className="w-full rounded-2xl bg-amber-400 text-slate-900 font-semibold py-3 shadow-sm transition hover:bg-amber-400/90 disabled:opacity-60"
               disabled={!card}
             >
-              Нужно повторить
+              Не уверен, нужно повторить
+            </button>
+            <button
+              onClick={() => handleAnswer('dontknow')}
+              className="w-full rounded-2xl bg-rose-500 text-white font-semibold py-3 shadow-sm transition hover:bg-rose-500/90 disabled:opacity-60"
+              disabled={!card}
+            >
+              Не знаю тему
             </button>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               Карточек в категории: {total}
+              <br />
+              На повторение: {reviewCounts.unsure + reviewCounts.dontknow} ({reviewCounts.unsure} «не уверен» · {reviewCounts.dontknow} «не знаю»)
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-export default function ProgressCard({ title, value, total }) {
+export default function ProgressCard({ title, value, total, reviewCount = 0 }) {
   const percentage = total === 0 ? 0 : Math.round((value / total) * 100);
 
   return (
@@ -17,6 +17,11 @@ export default function ProgressCard({ title, value, total }) {
         <p className="text-sm text-slate-600">
           {value} из {total} карточек освоено
         </p>
+        {reviewCount > 0 && (
+          <p className="text-xs font-medium text-amber-600">
+            На повторение: {reviewCount}
+          </p>
+        )}
       </div>
     </div>
   );
